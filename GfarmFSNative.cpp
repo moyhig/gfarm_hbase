@@ -4,6 +4,8 @@
 
 #include <gfarm/gfarm.h>
 
+#include <fstream>	// Add 2013.03.12
+
 #include <cassert>
 #include <iostream>
 #include <string>
@@ -14,11 +16,34 @@
 
 using namespace std;
 
+jboolean  api_act = JNI_FALSE;
+
 //-----------------------------------------------------------------------------
 // Utilities
 //
 namespace
 {
+  // Add Func 2013.03.12 
+  inline void api_open(const char *func){
+    unsigned int i;
+
+    for(i=0; i<30000; i++){
+      if(!api_act) break;
+      usleep(10000); 
+    }
+
+    if(i >= 30000){ 
+      std::ofstream ofs( "/tmp/gfarm_api.log", std::ios::out | std::ios::app );
+      ofs << "##### Gfarm api TimeOut Func = [" << func << "]" << std::endl;
+    }
+    api_act = JNI_TRUE;
+  }
+
+  // Add Func 2013.03.12 
+  inline void api_close(){
+    api_act = JNI_FALSE;
+  }
+
   inline string jstr2cppstr(JNIEnv *env, jstring src)
   {
     string cpps;
@@ -47,13 +72,29 @@ namespace
 JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_init
   (JNIEnv *env, jclass cls)
 {
-  return gfarm_initialize(0, NULL);
+  jint ret;
+
+  api_open(__func__);	// Add 2013.03.12
+  
+  ret = gfarm_initialize(0, NULL);
+
+  api_close();		// Add 2013.03.12
+
+  return ret;
 }
 
 JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_terminate
   (JNIEnv *env, jclass cls)
 {
-  return gfarm_terminate();
+  jint ret;
+
+  api_open(__func__);	// Add 2013.03.12
+
+  ret = gfarm_terminate();
+
+  api_close();		// Add 2013.03.12
+  
+  return ret;
 }
 
 
@@ -67,9 +108,15 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_mkdir
   (JNIEnv *env, jclass cls, jstring jstrpath)
 {
   string path = jstr2cppstr(env, jstrpath);
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_mkdir(path.c_str(), 0755);
   if(e != GFARM_ERR_NO_ERROR && e != GFARM_ERR_ALREADY_EXISTS)
     goto err;
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 
 err:
@@ -77,29 +124,59 @@ err:
     throw_file_not_found_exception(env, gfarm_error_string(e), path);
   else
     throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
 JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_rmdir
   (JNIEnv *env, jclass cls, jstring jstrpath)
 {
+  jint ret;
+
   string path = jstr2cppstr(env, jstrpath);
-  return gfs_rmdir(path.c_str());
+
+  api_open(__func__);	// Add 2013.03.12
+
+  ret = gfs_rmdir(path.c_str());
+
+  api_close();		// Add 2013.03.12
+
+  return ret;
 }
 
 JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_rename
   (JNIEnv *env, jclass cls, jstring jstrsrc, jstring jstrdst)
 {
+  jint ret;
+
   string src = jstr2cppstr(env, jstrsrc);
   string dst = jstr2cppstr(env, jstrdst);
-  return gfs_rename(src.c_str(), dst.c_str());
+
+  api_open(__func__);	// Add 2013.03.12
+
+  ret = gfs_rename(src.c_str(), dst.c_str());
+
+  api_close();		// Add 2013.03.12
+
+  return ret;
 }
 
 JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_remove
   (JNIEnv *env, jclass cls, jstring jstrpath)
 {
+  jint ret;
+
   string path = jstr2cppstr(env, jstrpath);
-  return gfs_remove(path.c_str());
+
+  api_open(__func__);	// Add 2013.03.12
+
+  ret = gfs_remove(path.c_str());
+
+  api_close();		// Add 2013.03.12
+
+  return ret;
 }
 
 JNIEXPORT jboolean JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_isDirectory
@@ -109,14 +186,23 @@ JNIEXPORT jboolean JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_isDir
   string path = jstr2cppstr(env, jstrpath);
 
   struct gfs_stat s;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_stat(path.c_str(), &s);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
   r = (GFARM_S_ISDIR(s.st_mode)) ? JNI_TRUE : JNI_FALSE;
+
   gfs_stat_free(&s);
+
+  api_close();		// Add 2013.03.12
+
   return r;
 
 err:
+  api_close();		// Add 2013.03.12
+
   return JNI_FALSE;
 }
 
@@ -127,14 +213,23 @@ JNIEXPORT jboolean JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_isFil
   string path = jstr2cppstr(env, jstrpath);
 
   struct gfs_stat s;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_stat(path.c_str(), &s);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
   r = (GFARM_S_ISREG(s.st_mode)) ? JNI_TRUE : JNI_FALSE;
+
   gfs_stat_free(&s);
+
+  api_close();		// Add 2013.03.12
+
   return r;  
 
 err:
+  api_close();		// Add 2013.03.12
+
   return JNI_FALSE;
 }
 
@@ -145,11 +240,17 @@ JNIEXPORT jlong JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_getFileS
   string path = jstr2cppstr(env, jstrpath);
 
   struct gfs_stat s;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_stat(path.c_str(), &s);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
   r = s.st_size;
   gfs_stat_free(&s);
+
+  api_close();		// Add 2013.03.12
+
   return r;
 
 err:
@@ -157,6 +258,9 @@ err:
     throw_file_not_found_exception(env, gfarm_error_string(e), path);
   else
     throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -167,11 +271,17 @@ JNIEXPORT jlong JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_getModif
   string path = jstr2cppstr(env, jstrpath);
 
   struct gfs_stat s;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_stat(path.c_str(), &s);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
   r = s.st_mtimespec.tv_sec * 1000; // TODO: Is this ok?
   gfs_stat_free(&s);
+
+  api_close();		// Add 2013.03.12
+
   return r;
 
 err:
@@ -179,6 +289,9 @@ err:
     throw_file_not_found_exception(env, gfarm_error_string(e), path);
   else
     throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -189,11 +302,17 @@ JNIEXPORT jlong JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_getRepli
   string path = jstr2cppstr(env, jstrpath);
 
   struct gfs_stat s;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_stat(path.c_str(), &s);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
   r = s.st_ncopy;
   gfs_stat_free(&s);
+
+  api_close();		// Add 2013.03.12
+
   return r;
 
 err:
@@ -201,6 +320,9 @@ err:
     throw_file_not_found_exception(env, gfarm_error_string(e), path);
   else
     throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -214,6 +336,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_r
   gfarm_error_t e;
   GFS_Dir dir;
   struct gfs_dirent *entry;
+
+  api_open(__func__);	// Add 2013.03.12
+
   e = gfs_opendir(path.c_str(), &dir);
   if(e != GFARM_ERR_NO_ERROR){
     if(e == GFARM_ERR_NO_SUCH_FILE_OR_DIRECTORY)
@@ -234,14 +359,23 @@ JNIEXPORT jobjectArray JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_r
     env->SetObjectArrayElement(jentries, i, s);
     env->DeleteLocalRef(s);
   }
+
+  api_close();		// Add 2013.03.12
+
   return jentries;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return NULL;
 
 err_not_found:
   throw_file_not_found_exception(env, gfarm_error_string(e), path);
+
+  api_close();		// Add 2013.03.12
+
   return NULL;
 }
 
@@ -256,8 +390,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_g
   jclass jstrClass = env->FindClass("Ljava/lang/String;");
   jstring s;
 
-  e = gfs_replica_list_by_name(path.c_str(), &n, &hosts);
+  api_open(__func__);	// Add 2013.03.12
 
+  e = gfs_replica_list_by_name(path.c_str(), &n, &hosts);
   jobjectArray jentries = env->NewObjectArray(n, jstrClass, NULL);
 
   if (e == GFARM_ERR_NO_ERROR) {
@@ -272,6 +407,8 @@ JNIEXPORT jobjectArray JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNative_g
     free(hosts[i]);
   free(hosts);
 
+  api_close();		// Add 2013.03.12
+
   return jentries;
 }
 
@@ -283,9 +420,15 @@ JNIEXPORT jlong JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeOutputCha
 {
   string path = jstr2cppstr(env, jstrpath);
   GFS_File f = NULL;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_create(path.c_str(), GFARM_FILE_WRONLY | GFARM_FILE_TRUNC, 0644, &f);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
+
+  api_close();		// Add 2013.03.12
+
   return (jlong)f;
 
 err:
@@ -294,6 +437,9 @@ err:
   else
     throw_io_exception(env, gfarm_error_string(e));
   if(f != NULL) gfs_pio_close(f);
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 }
 
@@ -302,13 +448,22 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeOutputChan
 {
   GFS_File f = (GFS_File)jptr;
   if(f == NULL) return 0;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_close(f);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -326,14 +481,23 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeOutputChan
   if(begin < 0 || end > cap || begin >= end)
     return 0;
 
-  addr = (void *)(uintptr_t(addr) + begin);
+  addr = (void *)(intptr_t(addr) + begin);
   int ret = 0;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_write(f, addr, (end - begin), &ret);
   if(e != GFARM_ERR_NO_ERROR) goto err;
+
+  api_close();		// Add 2013.03.12
+
   return ret;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -343,12 +507,21 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeOutputChan
   gfarm_error_t e;
   GFS_File f = (GFS_File)jptr;
   if(f == NULL) return 0;
+
+  api_open(__func__);	// Add 2013.03.12
+
   e = gfs_pio_flush(f);
   if(e != GFARM_ERR_NO_ERROR) goto err;
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -358,14 +531,23 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeOutputChan
   gfarm_error_t e;
   GFS_File f = (GFS_File)jptr;
   if(f == NULL) return 0;
+
+  api_open(__func__);	// Add 2013.03.12
+
   e = gfs_pio_flush(f);
   if(e != GFARM_ERR_NO_ERROR) goto err;
   e = gfs_pio_sync(f);
   if(e != GFARM_ERR_NO_ERROR) goto err;
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -373,12 +555,21 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeOutputChan
   (JNIEnv *env, jclass cls, jlong jptr, jlong joffset)
 {
   GFS_File f = (GFS_File)jptr;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_seek(f, joffset, GFARM_SEEK_SET /* from beginning */, NULL);
   if(e != GFARM_ERR_NO_ERROR) goto err;
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -387,12 +578,21 @@ JNIEXPORT jlong JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeOutputCha
 {
   GFS_File f = (GFS_File)jptr;
   gfarm_off_t cur;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_seek(f, 0, GFARM_SEEK_CUR /* from current */, &cur);
   if(e != GFARM_ERR_NO_ERROR) goto err;
+
+  api_close();		// Add 2013.03.12
+
   return cur;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -404,17 +604,27 @@ JNIEXPORT jlong JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeInputChan
 {
   string path = jstr2cppstr(env, jstrpath);
   GFS_File f = NULL;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_open(path.c_str(), GFARM_FILE_RDONLY, &f);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
+
+  api_close();		// Add 2013.03.12
+
   return (jlong)f;
 
 err:
+
   if(e == GFARM_ERR_NO_SUCH_FILE_OR_DIRECTORY)
     throw_file_not_found_exception(env, gfarm_error_string(e), path);
   else
     throw_io_exception(env, gfarm_error_string(e));
   if(f != NULL) gfs_pio_close(f);
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 }
 
@@ -423,13 +633,22 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeInputChann
 {
   GFS_File f = (GFS_File)jptr;
   if(f == NULL) return 0;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_close(f);
   if(e != GFARM_ERR_NO_ERROR)
     goto err;
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -447,14 +666,23 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeInputChann
   if(begin < 0 || end > cap || begin >= end)
     return 0;
 
-  addr = (void *)(uintptr_t(addr) + begin);
+  addr = (void *)(intptr_t(addr) + begin);
   int ret = 0;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_read(f, addr, (end - begin), &ret);
   if(e != GFARM_ERR_NO_ERROR) goto err;
+
+  api_close();		// Add 2013.03.12
+
   return ret;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -463,12 +691,21 @@ JNIEXPORT jint JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeInputChann
   (JNIEnv *env, jclass cls, jlong jptr, jlong joffset)
 {
   GFS_File f = (GFS_File)jptr;
+
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_seek(f, joffset, GFARM_SEEK_SET /* from beginning */, NULL);
   if(e != GFARM_ERR_NO_ERROR) goto err;
+
+  api_close();		// Add 2013.03.12
+
   return 0;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }
 
@@ -477,11 +714,20 @@ JNIEXPORT jlong JNICALL Java_org_apache_hadoop_fs_gfarmfs_GfarmFSNativeInputChan
 {
   GFS_File f = (GFS_File)jptr;
   gfarm_off_t cur;
+  
+  api_open(__func__);	// Add 2013.03.12
+
   gfarm_error_t e = gfs_pio_seek(f, 0, GFARM_SEEK_CUR /* from current */, &cur);
   if(e != GFARM_ERR_NO_ERROR) goto err;
+
+  api_close();		// Add 2013.03.12
+
   return cur;
 
 err:
   throw_io_exception(env, gfarm_error_string(e));
+
+  api_close();		// Add 2013.03.12
+
   return -1;
 }

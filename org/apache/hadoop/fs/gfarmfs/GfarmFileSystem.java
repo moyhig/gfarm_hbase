@@ -14,6 +14,8 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.fs.BlockLocation;
 
+import org.apache.hadoop.util.StringUtils;	// Add 2013.03.12
+
 /**
  * A FileSystem backed by Gfarm
  *
@@ -25,21 +27,28 @@ public class GfarmFileSystem extends FileSystem {
     private URI uri;
     private Path workingDir;
    
+    private String wk = "/home/" + System.getProperty("user.name");
+   
     public GfarmFileSystem() {
     }
 
+    @Override
     public void initialize(URI uri, Configuration conf) throws IOException {
+        super.initialize(uri, conf);
         try {
-            if (gfsImpl == null)
+
+            if (gfsImpl == null){
                 gfsImpl = new GfarmFSNative();
+            }
             this.localFs = FileSystem.getLocal(conf);
             this.uri = URI.create(uri.getScheme() + "://" + "null");
-	    String[] workingDirStr = getConf().getStrings("fs.gfarm.workingDir","/home/" + System.getProperty("user.name"));
+	    String[] workingDirStr = StringUtils.getStrings(wk);
 	    this.workingDir = 
 		new Path(workingDirStr[0]).makeQualified(this);
+            
+            setConf(conf);
         } catch (Exception e) {
             e.printStackTrace();
-            System.out.println("Unable to initialize Gfarm file system");
             System.exit(-1);
         }
     }
@@ -64,24 +73,28 @@ public class GfarmFileSystem extends FileSystem {
 	return super.makeQualified(path);
     }
 
+    @Override
     public URI getUri() {
         return uri;
     }
-
+    
     private Path makeAbsolute(Path path) {
         if (path.isAbsolute())
             return path;
         return new Path(workingDir, path);
     }
 
+    @Override
     public void setWorkingDirectory(Path new_dir) {
         workingDir = makeAbsolute(new_dir);
     }
     
+    @Override
     public Path getWorkingDirectory() {
         return workingDir;
     }
 
+    @Override
     public FSDataInputStream open(Path path, int bufferSize)
         throws IOException {
         if (!exists(path))
@@ -94,6 +107,7 @@ public class GfarmFileSystem extends FileSystem {
         return new FSDataInputStream(new GfarmFSInputStream(gfsImpl, srep, statistics));
     }
 
+    @Override
     public FSDataOutputStream create(Path file,
                                      FsPermission permission,
                                      boolean overwrite,
@@ -120,11 +134,13 @@ public class GfarmFileSystem extends FileSystem {
         return new FSDataOutputStream(new GfarmFSOutputStream(srep), statistics);
     }
 
+    @Override
     public FSDataOutputStream append(Path f, int bufferSize,
 				     Progressable progress) throws IOException {
 	throw new IOException("Not supported");
     }
 
+    @Override
     public boolean rename(Path src, Path dst) throws IOException {
         Path absoluteS = makeAbsolute(src);
         String srepS = absoluteS.toUri().getPath();
@@ -147,6 +163,7 @@ public class GfarmFileSystem extends FileSystem {
         return gfsImpl.getFileSize(srep);
     }
 
+    @Override
     public boolean delete(Path path, boolean recursive) throws IOException {
         int e;
         Path absolute = makeAbsolute(path);
@@ -173,20 +190,28 @@ public class GfarmFileSystem extends FileSystem {
         return true;
     }
 
+    @Override
     public FileStatus[] listStatus(Path path) throws IOException {
+        FileStatus[] pathEntries;
         Path absolute = makeAbsolute(path);
         String srep = absolute.toUri().getPath();
+
+        if (!exists(path)) {
+            throw new FileNotFoundException("gfarm File " + path + " does not exist");
+        }
+
         if (gfsImpl.isFile(srep))
             return new FileStatus[] { getFileStatus(path) } ;
-	String[] entries = null;
-	try {
-	    entries = gfsImpl.readdir(srep);
-	} catch ( Exception e) {
-	    return null;
-	}
-
-        if (entries == null)
+        String[] entries = null;
+        try {
+            entries = gfsImpl.readdir(srep);
+        } catch ( Exception e) {
             return null;
+        }
+
+        if (entries == null){
+            return null;
+        }
 
         // gfsreaddir() returns "." and ".."; strip them before
         // passing back to hadoop fs.
@@ -197,7 +222,7 @@ public class GfarmFileSystem extends FileSystem {
             numEntries++;
         }
 
-        FileStatus[] pathEntries = new FileStatus[numEntries];
+        pathEntries = new FileStatus[numEntries];
         int j = 0;
         for (int i = 0; i < entries.length; i++) {
             if ((entries[i].compareTo(".") == 0) || (entries[i].compareTo("..") == 0))
@@ -208,7 +233,8 @@ public class GfarmFileSystem extends FileSystem {
         }
         return pathEntries;
     }
-
+    
+    @Override
     public boolean mkdirs(Path path, FsPermission permission)
         throws IOException {
         Path absolute = makeAbsolute(path);
@@ -220,7 +246,7 @@ public class GfarmFileSystem extends FileSystem {
             for (int i = 0; i < dirs.length; i++) {
                 if (dirs[i].equals("")) continue;
                 dir += dirs[i];
-                System.out.println("dir = " + dir);
+                // System.out.println("dir = " + dir);
                 //System.out.println("dir = " + dirs[i]);
                 int e = gfsImpl.mkdir(dir);
                 if (e != 0)
@@ -234,15 +260,19 @@ public class GfarmFileSystem extends FileSystem {
     public FileStatus getFileStatus(Path path) throws IOException {
         Path absolute = makeAbsolute(path);
         String srep = absolute.toUri().getPath();
-        if (gfsImpl.isDirectory(srep)) {
-            return new FileStatus(0, true, 1, 0, gfsImpl.getModificationTime(srep),
-                                  path.makeQualified(this));
-        } else {
+        if (!gfsImpl.isDirectory(srep)) {
+          if (!gfsImpl.isFile(srep)) {
+            throw new FileNotFoundException("gfarm File " + path + " does not exist");
+          } else {
             return new FileStatus(gfsImpl.getFileSize(srep),
                                   false,
                                   (int)gfsImpl.getReplication(srep),
                                   getDefaultBlockSize(path),
                                   gfsImpl.getModificationTime(srep),
+                                  path.makeQualified(this));
+          }
+        } else {
+            return new FileStatus(0, true, 1, 0, gfsImpl.getModificationTime(srep),
                                   path.makeQualified(this));
         }
     }
@@ -260,5 +290,66 @@ public class GfarmFileSystem extends FileSystem {
 
 	return new BlockLocation[] { new BlockLocation(null, hints, 0, len) };
     }
+
+// Add 2013.03.12 Start
+
+    GfarmFileSystem(GfarmFSNative fsimpl) {
+        this.gfsImpl = fsimpl;
+    }
+
+    @Override
+    public String getScheme() {
+      return "gfarm";
+    }
+
+    @Override
+    public boolean exists(Path path) throws IOException {
+        Path absolute = makeAbsolute(path);
+        String srep = absolute.toUri().getPath();
+
+        if (gfsImpl.isDirectory(srep)) return true;
+        if (gfsImpl.isFile(srep)) return true;
+
+        return false;
+    }
+
+    @Override
+    public boolean isDirectory(Path path) throws IOException {
+        Path absolute = makeAbsolute(path);
+        String srep = absolute.toUri().getPath();
+
+        // System.out.println("Calling isdir on: " + srep);
+
+        return gfsImpl.isDirectory(srep);
+    }
+
+    @Override
+    public boolean isFile(Path path) throws IOException {
+        Path absolute = makeAbsolute(path);
+        String srep = absolute.toUri().getPath();
+        return gfsImpl.isFile(srep);
+    }
+
+    public File pathToFile(Path path) {
+      checkPath(path);
+      if (!path.isAbsolute()) {
+        path = new Path(getWorkingDirectory(), path);
+      }
+      return new File(path.toUri().getPath());
+    }
+
+    @Override
+    public short getDefaultReplication() {
+        return 1;
+    }
+
+    // 64MB? is the gfarm block size
+
+    @Override
+    public long getDefaultBlockSize() {
+        return 1 << 26;
+    }
+
+// Add 2013.03.12 End
 
 }

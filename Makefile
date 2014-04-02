@@ -5,14 +5,17 @@ JAVA_SOURCES = \
 	org/apache/hadoop/fs/gfarmfs/GfarmFSInputStream.java \
 	org/apache/hadoop/fs/gfarmfs/GfarmFSNative.java \
 	org/apache/hadoop/fs/gfarmfs/GfarmFSNativeOutputChannel.java \
-	org/apache/hadoop/fs/gfarmfs/GfarmFSNativeInputChannel.java
+	org/apache/hadoop/fs/gfarmfs/GfarmFSNativeInputChannel.java \
+	org/apache/hadoop/fs/gfarmfs/GfarmFs.java \
+	org/apache/hadoop/fs/gfarmfs/RawGfarmFs.java \
+	org/apache/hadoop/fs/gfarmfs/GfarmConfigKeys.java
 JNI_CLASSES = \
 	org.apache.hadoop.fs.gfarmfs.GfarmFSNative \
 	org.apache.hadoop.fs.gfarmfs.GfarmFSNativeOutputChannel \
 	org.apache.hadoop.fs.gfarmfs.GfarmFSNativeInputChannel
 
 # GCC
-CXXFLAGS = -Wall -O2 -g -D_REENTRANT -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux
+CXXFLAGS = -Wall -O2 -g -D_REENTRANT -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${CPLUS_INCLUDE_PATH}
 LDFLAGS  = -lgfarm
 
 all: hadoop-gfarm.jar
@@ -21,7 +24,7 @@ hadoop-gfarm.jar: libGfarmFSNative.so
 	jar cmf manifest.cf hadoop-gfarm.jar org/apache/hadoop/fs/gfarmfs/*.class libGfarmFSNative.so
 
 libGfarmFSNative.so: org_apache_hadoop_fs_gfarmfs_GfarmFSNative.h GfarmFSNative.cpp
-	g++ ${CXXFLAGS} -shared -fPIC GfarmFSNative.cpp -o libGfarmFSNative.so ${LDFLAGS} -L ${GFARM_HOME}/lib
+	g++ ${CXXFLAGS} -shared -fPIC GfarmFSNative.cpp -o libGfarmFSNative.so -L${GFARM_HOME}/lib ${LDFLAGS} -L${GFARM_HOME}/lib
 
 org_apache_hadoop_fs_gfarmfs_GfarmFSNative.h: ${JAVA_SOURCES}
 	javac -g -Xlint:deprecation -classpath ${CLASSPATH} ${JAVA_SOURCES}

@@ -9,7 +9,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.util.Progressable;
-
+/*
+private final short blockReplication; // replication factor of file
+*/
 class GfarmFSOutputStream extends OutputStream {
     GfarmFSNativeOutputChannel channel = null;
 
@@ -56,4 +58,13 @@ class GfarmFSOutputStream extends OutputStream {
         channel.close();
         channel = null;
     }
+
+  public synchronized int getNumCurrentReplicas() throws IOException {
+    return getCurrentBlockReplication();
+  }
+
+  public synchronized int getCurrentBlockReplication() throws IOException {
+    return 1;
+  }
+
 }
